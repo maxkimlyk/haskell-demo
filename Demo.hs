@@ -208,6 +208,14 @@ squareRoots' a b c = (x1, x2) where
     d = b^2 - 4 * a * c
     sqrtD = sqrt (d)
 
+dist :: (Double, Double) -> (Double, Double) -> Double
+dist p1 p2 = sqrt $ (x1 - x2) ^ 2 + (y1 - y2) ^ 2
+    where
+        x1 = fst p1
+        x2 = fst p2
+        y1 = snd p1
+        y2 = snd p2
+
 -------------------------------------------------------------------------------
 -- Использование вспомогательных функций (пример)
 -------------------------------------------------------------------------------
@@ -243,6 +251,16 @@ instance MP Bool where
 instance (MP a, MP b) => MP (a,b) where
     p1 *+ p2 = (fst p1 *+ fst p2, snd p1 *+ snd p2)
 
+-- Зацикленный энум
+class (Eq a, Enum a, Bounded a) => SafeEnum a where
+    ssucc :: a -> a
+    ssucc x | x == maxBound = minBound
+            | otherwise = succ x
+
+    spred :: a -> a
+    spred x | x == minBound = maxBound
+            | otherwise = pred x
+
 -------------------------------------------------------------------------------
 -- show и read
 -------------------------------------------------------------------------------
@@ -254,4 +272,3 @@ num_123 = read "123" :: Integer
 
 -- Есть еще одна функция: reads. Она возвращает список. Если парсинг неудачен, то список будет пустым.
 reads_2girls = reads "2 girls" :: [(Int, String)]
-

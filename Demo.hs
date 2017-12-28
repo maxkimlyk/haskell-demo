@@ -39,8 +39,11 @@
 module Demo where
 
 -- Импортирование других модулей
-import Data.Char
-import Data.Complex
+import Data.Complex                  -- полностью
+import Data.Char (toUpper, toLower)  -- только некоторые функции
+import Data.Data hiding (gunfold)    -- кроме заданных
+import qualified Data.List           -- для всех функций из этого модуля должны использоваться полные имена
+import Data.Set as Set               -- импорт с назначением псевдонима
 
 -------------------------------------------------------------------------------
 -- Определение функций

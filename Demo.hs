@@ -437,3 +437,81 @@ xs     !! n | n < 0 = error "NegativeIndex"
 -}
 
 
+-- filter
+{-
+filter :: (a -> Bool) -> [a] -> [a]
+filter p [] = []
+filter p (x:xs)
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
+-}
+
+-- takeWhile
+{-
+takeWhile :: (a -> Bool) -> [a] -> [a]
+takeWhile _ [] = []
+takeWhile p (x:xs)
+   | p x       = x :takeWhile p xs
+   | otherwise = []
+-}
+
+-- dropWhile
+{-
+dropWhile :: (a -> Bool) -> [a] -> [a]
+dropWhile _ [] = []
+dropWhile p xs@(x:xs')            - @ это симсол синонима (псевдонима)
+   | p x       = dropWhile p xs'
+   | otherwise = xs
+-}
+
+-- span
+{-
+span :: (a -> Bool) -> [a] -> ([a],[a])
+span p xs = (takeWhile p xs, dropWhile p xs)
+-}
+
+-- break
+{-
+break :: (a -> Bool) -> [a] -> ([a],[a])
+break p = span (not . p)
+-}
+
+-- map
+{-
+map :: (a -> b) -> [a] -> [b]
+map _ []     = []
+map f (x:xs) = f x : map f xs
+-}
+
+-- concat
+{-
+concat :: [[a]] -> [a]
+concat []       = []
+concat (xs:xss) = xs ++ concat xss
+-}
+
+-- concatMap
+{-
+concatMap :: (a -> [b]) -> [a] -> [b]
+concatMap f xs = concat . map f xs
+-}
+
+-- all
+{-
+all :: (a -> Bool) -> [a] -> Bool
+all p = and . map p
+-}
+
+-- any
+{-
+any :: (a -> Bool) -> [a] -> Bool
+any p = or . map p
+-}
+
+-- zipWith
+{-
+zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith _ []     _      = []
+zipWith _ _      []     = []
+zipWith f (x:xs) (y:ys) = f x y : zipWith f xs ys
+-}

@@ -20,6 +20,7 @@
 -- :l, :load     - загрузить программу
 -- :r, :reload   - перезагрузить текущий модуль
 -- :t, :type     - напечатать сигнатуру функции
+-- :k, :kind     - напечатать вид типа
 -- :i, :info     - напечатать сигнатуру функции и указать, в каком файле функция была определена
 -- :?, :h, :help - help
 
@@ -656,4 +657,122 @@ unfoldr f ini = helper (f ini) where
     helper (Just (x,ini')) = x : unfoldr f ini'
     helper Nothing         = []
 -}
+
+-------------------------------------------------------------------------------
+-- Типы данных
+-------------------------------------------------------------------------------
+-- Конструктор типа = Конструктор данных 1 | Конструктор данных 2
+data B = T | F deriving (Show, Read, Eq, Enum)
+-- это является типом суммы
+
+-- Функция, определенная на данных пользовательского типа
+not' :: B -> B
+not' T = F
+not' F = T
+
+
+-- Типы произведения
+data Point = Point Double Double deriving Show
+
+origin :: Point
+origin = Point 0.0 0.0
+
+distance (Point x1 y1) (Point x2 y2) = sqrt ((x1-x2)^2 + (y1-y2)^2)
+
+
+-- Типы суммы призведений
+data Roots = Roots Double Double | None deriving Show
+
+squareRoots'' a b c
+    | d >= 0 = Roots x1 x2
+    | otherwise = None
+    where
+        x1 = (-b - sqrtD) / (2 * a)
+        x2 = (-b + sqrtD) / (2 * a)
+        d = b^2 - 4 * a * c
+        sqrtD = sqrt (d)
+
+
+-- Ленивые образцы.
+-- В таком случае сопоставление с образцом всегда удачно и происходит только тогда
+-- когда это становится необходимым для вычислений.
+(***) f g ~(x,y) = (f x, g y)
+-- Поэтому возможно произвести такой вызов:
+example1 = ((const 1) *** (const 2)) undefined  -- = (1,2)
+
+
+-- Метки полей
+data Person = Person { firstName :: String, lastName :: String, age :: Int }
+    deriving (Show, Eq)
+
+vasya = Person "Vasiliy" "Smith" 25
+xaview = Person {age = 40, firstName = "Phideaux", lastName = "Xavier"}
+-- unknownBill = Person {firstName = "Bill"} -- warning: не все поля заполнены
+
+-- Доступ по метке
+vasyasAge1 = age vasya
+--vasyasAge2 = vasya & age   -- в новом стандарте
+updateAge newAge person = person {age = newAge}
+
+-- Сопоставления с образцами в синтаксисе записей
+name (Person fn ln _) = fn ++ " " ++ ln
+name' (Person {lastName = ln, firstName = fn}) = fn ++ " " ++ ln
+
+
+-- Типы с параметрами
+data CoordD = CoordD Double Double
+data CoordI = CoordI Int Int
+data Coord a = Coord a a
+
+-- Тип данных Maybe
+-- Maybe a = Noting | Just a
+
+-- Тип Either
+-- Either a b = Left a | Right b
+squareRoots''' :: Double -> Double -> Double -> Either [Char] (Double, Double)
+squareRoots''' a b c
+    | d >= 0 = Right (x1, x2)
+    | otherwise = Left "Negative discriminant"
+    where
+        x1 = (-b - sqrtD) / (2 * a)
+        x2 = (-b + sqrtD) / (2 * a)
+        d = b^2 - 4 * a * c
+        sqrtD = sqrt (d)
+
+
+-- Ленивые и строгие параметры
+data CoordLazy a = CoordLazy a a        -- ленивые параметры
+data CoordStrict a = CoordStrice !a !a  -- строгие параметры (вычисления этих параметров форсируются)
+
+
+-- Инфиксные конструкторы данных.
+-- Любой инфиксный конструктор данных должен начинаться с :
+{-
+data Complex a = !a :+ !a
+data Ratio a   = !a :% !a
+data [] a      = [] | a : ([] a)
+-}
+
+data List a = Nil | Cons a (List a)
+    deriving Show
+
+
+-- Синонимы типов
+-- type String = [Char]
+type IntegerList = [Integer]
+type Map keyT valT = [(keyT, valT)]
+
+-- newtype
+newtype IntList = IList [Int] deriving Show
+example2 = IList [1,2]
+-- В отличие от type исползование newtype не наследует всех представителей классов типов.
+
+-- Отличие newtype от data
+-- - newtype гарантрованно имеет только один конструктор (это позволяет делать разные оптимизации)
+-- - тип данных, определенный с помощью newtype, более ленив, чем тип, определенный с помощью data.
+
+-- Такой контейнер присутсвует только во время разработаки.
+-- Во время исполнения вместо него хранится просто значения типа a.
+newtype Identity a = Identity {runIdentity :: a}
+    deriving (Eq, Ord)
 

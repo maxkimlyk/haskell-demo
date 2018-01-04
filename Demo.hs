@@ -6,7 +6,7 @@
 --------------------------------------------------------
 
 -- Это демо модуль на языке Haskell, в котором показаны основные особенности возможности языка.
---
+
 -- Материал берется в основном отсюда:
 -- http://wiki.nsunc.com/_export/html/haskell
 -- и отсюда:
@@ -48,6 +48,10 @@ import Data.Char (toUpper, toLower)  -- только некоторые функ
 import Data.Data hiding (gunfold)    -- кроме заданных
 import qualified Data.List           -- для всех функций из этого модуля должны использоваться полные имена
 import qualified Data.Set as Set     -- импорт с назначением псевдонима
+
+import Prelude hiding (
+    Monoid, mempty, mappend, Functor, fmap
+    )
 
 -------------------------------------------------------------------------------
 -- Определение функций
@@ -776,3 +780,66 @@ example2 = IList [1,2]
 newtype Identity a = Identity {runIdentity :: a}
     deriving (Eq, Ord)
 
+
+-- Моноиды
+class Monoid a where
+    mempty :: a            -- нейтральный элемент
+    mappend :: a -> a -> a -- бинарная операция
+
+    mconcat :: [a] -> a    -- свертка
+    mconcat = foldr mappend mempty
+
+{- LAWS:
+mempty `mappend` x = x
+x `mappend` mempty = x
+(x `mappend` y) `mappend` z = x `mappend` (y `mappend` z)
+-}
+
+-- Списки - простейшие представители класса типов Monoid
+instance Monoid [a] where
+    mempty = []
+    mappend = (++)
+
+-- Числа относительно операций сложения и умножения являются монойдами.
+-- Числа как моноид относительно операции сложения:
+newtype Sum a = Sum {getSum :: a}
+    deriving (Eq, Ord, Read, Show, Bounded)
+-- Напоминание: такой контейнер существует только во время разработки.
+-- Во время исполнения вместо него подставляется просто значение типа a.
+
+instance Num a => Monoid (Sum a) where
+    mempty = Sum 0
+    Sum x `mappend` Sum y = Sum (x + y)
+
+-- Числа как моноид относительно операции умножения:
+newtype Product a = Product {getProduct :: a}
+    deriving (Eq, Ord, Read, Show, Bounded)
+
+instance Num a => Monoid (Product a) where
+    mempty = Product 1
+    Product x `mappend` Product y = Product (x * y)
+
+
+-------------------------------------------------------------------------------
+-- Functor
+-------------------------------------------------------------------------------
+class Functor f where
+    fmap :: (a -> b) -> f a -> f b    -- :kind f = * -> *, т.е. f - контейнерный тип
+
+{- LAWS
+(1)    fmap id = id
+(2)    fmap (f . g) = fmap f . fmap g
+-}
+
+-- fmap является обобщением функции map для контейнера f.
+instance Functor [] where
+    fmap = map
+
+-- fmap можно определить и на контейнере Maybe
+instance Functor Maybe where
+    fmap _ Nothing  = Nothing
+    fmap f (Just a) = Just (f a)
+
+-- Говорят, что fmap поднимает вычисление в контейнер.
+-- У fmap есть эквивалентный оператор <$>
+example3 = (+1) <$> [1, 2, 3] -- = [2, 3, 4]

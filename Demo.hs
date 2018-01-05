@@ -43,11 +43,11 @@ let используется, чтобы определять новые фун�
 module Demo where
 
 -- Импортирование других модулей
-import Data.Char                     -- полностью
-import Data.List (find)              -- только некоторые функции
-import Data.Data hiding (gunfold)    -- кроме заданных
-import qualified Data.List           -- для всех функций из этого модуля должны использоваться полные имена
-import qualified Data.Set as Set     -- импорт с назначением псевдонима
+import Data.Char                              -- полностью
+import Data.List (find)                       -- только некоторые функции
+import Control.Monad.State hiding (withState) -- кроме заданных
+import qualified Data.Set                     -- для всех функций из этого модуля должны использоваться полные имена
+import Data.Word as Word                      -- импорт с назначением псевдонима
 
 import Prelude hiding (
     id, const, flip, (.), ($!),
@@ -55,7 +55,7 @@ import Prelude hiding (
     take, drop, splitAt, (!!),
     filter, takeWhile, dropWhile, span, break,
     map, concat, concatMap, all, any, zipWith, zipWith3,
-    Monoid, mempty, mappend, Functor, fmap
+    Monoid, mempty, mappend
     )
 
 -------------------------------------------------------------------------------
@@ -785,8 +785,10 @@ instance Num a => Monoid (Product a) where
 -------------------------------------------------------------------------------
 -- Functor
 -------------------------------------------------------------------------------
+{-
 class Functor f where
     fmap :: (a -> b) -> f a -> f b    -- :kind f = * -> *, т.е. f - контейнерный тип
+-}
 
 {- LAWS
 (1)    fmap id = id
@@ -794,13 +796,17 @@ class Functor f where
 -}
 
 -- fmap является обобщением функции map для контейнера f.
+{-
 instance Functor [] where
     fmap = map
+-}
 
 -- fmap можно определить и на контейнере Maybe
+{-
 instance Functor Maybe where
     fmap _ Nothing  = Nothing
     fmap f (Just a) = Just (f a)
+-}
 
 -- Говорят, что fmap поднимает вычисление в контейнер.
 -- У fmap есть эквивалентный оператор <$>
@@ -869,7 +875,6 @@ newtype Identity a = Identity {runIdentity :: a}
     deriving (Eq, Ord, Show)
 -}
 
-{-
 instance Functor Identity where
     fmap f (Identity x) = Identity (f x)
 
@@ -880,5 +885,287 @@ instance Applicative Identity where
 instance Monad Identity where
     return x = Identity x
     Identity x >>= k = k x
+
+-- do-нотация
+{-
+do { e1 ; e2 } = e1 >> e2
+do { p <- e1; e2 } = e1 >>= \p -> e2
+do { let v = e1; e2 } = let v = e1 in do e2
 -}
 
+wrap'n'succ x = Identity (succ x)
+
+-- монадические вычисления goWrap1, goWrap2, goWrap3, goWrap4 эквивалентны:
+
+goWrap1 =
+    let i = 3 in
+    wrap'n'succ 3 >>=
+    wrap'n'succ >>=
+    wrap'n'succ >>=
+    return
+
+goWrap2 =
+    wrap'n'succ 3 >>= (\x ->
+    wrap'n'succ x >>= (\y ->
+    wrap'n'succ y >>= (\z ->
+    return z)))
+
+goWrap3 =
+    let i = 3 in
+    wrap'n'succ i >>= \x ->
+    wrap'n'succ x >>= \y ->
+    wrap'n'succ y >>
+    return (i, x+y)
+
+goWrap4 = do
+    let i = 3
+    x <- wrap'n'succ i
+    y <- wrap'n'succ x
+    wrap'n'succ y
+    return (i, x+y)
+
+-------------------------------------------------------------------------------
+-- Монада Maybe
+-------------------------------------------------------------------------------
+{-
+data Maybe a = Nothing | Just a
+    deriving (Eq, Ord)
+
+instance Monad Maybe where
+    return x = Just x
+
+    (Just x) >>= k = k x
+    Nothing >>= _  = Nothing
+
+    (Just _) >> m = m
+    Nothing >> _  = Nothing
+
+    fail _ = Nothing
+-}
+
+-------------------------------------------------------------------------------
+-- Монада списка
+-------------------------------------------------------------------------------
+{-
+instance Monad [] where
+    return x = [x]
+    xs >>= k = concatMap k xs
+    fail   _ = []
+-}
+
+example4 = return 4 :: [Int]             -- = [4]
+example5 = [1, 2] >>= (\x -> [x+1, x*2]) -- = [2,2,3,4]
+example6 = [1, 2] >>= (\x -> [])         -- = []
+
+-- Генератор списка list7 полностью эквивалентен монадному вычислению list7'
+list7  = [(x,y) | x <- [1,2,3], y <- [4,5,6]]
+list7' = do
+    x <- [1,2,3]
+    y <- [4,5,6]
+    return (x,y)
+
+list8  = [(x,y) | x <- [1,2,3], y <- [4,5,6]]
+list8' = do
+    x <- [1,2,3]
+    y <- [4,5,6]
+    True <- return (x /= y)
+    return (x,y)
+
+-------------------------------------------------------------------------------
+-- Монада IO
+-------------------------------------------------------------------------------
+{-
+type IO a = RealWorld -> (RealWorld, a)
+
+instance Monad IO where
+    return a = \w -> (w, a)
+    (>>=) m k = \w -> case m w of (w',a) -> k a w'
+-}
+
+hello = do
+    putStrLn "What is your name?"
+    name <- getLine
+    putStrLn $ "Nice to meet you, " ++ name ++ "!"
+
+getLine' :: IO String
+getLine' = do
+    c <- getChar
+    if c == '\n' then
+        return []
+    else do
+        cs <- getLine'
+        return (c:cs)
+
+putStr' :: String -> IO ()
+putStr' [] = return ()
+putStr' (x:xs) = putChar x >> putStr' xs
+
+{-
+sequence_ :: Monad m => [m a] -> m ()
+sequence_ = foldr (>>) (return ())
+-}
+
+{-
+mapM_ :: Monad m => (a -> m b) -> [a] -> m ()
+mapM f = sequence_ . map f
+-}
+
+{-
+sequence :: Monad m => [m a] -> m [a]
+sequence ms = foldr k (return ()) ms where
+    k :: Monad m => m a -> m [a] -> m [a]
+    k m m' = do
+        x <- m
+        xs <- m'
+        return (x:xs)
+-}
+
+{-
+mapM :: Monad m => (a -> m b) -> [a] -> m [b]
+mapM f = sequence . map f
+-}
+
+-------------------------------------------------------------------------------
+-- Монада Reader
+-------------------------------------------------------------------------------
+{-
+instance Monad ((->) e) where
+    -- return :: a -> (e -> a)
+    return x = \_ -> x
+    (>>=) :: (e -> a) -> (a -> e -> b) -> e -> b
+    m >>= k = \e -> k (m e) e
+-}
+
+safeHead = do
+    b <- null
+    if b then
+        return Nothing
+    else do
+        h <- head
+        return $ Just h
+
+example7  = safeHead []    -- = Nothing
+example7' = safeHead [1,2] -- = Just 1
+
+{-
+newtype Reader r a = Reader { runReader :: (r -> a) }
+
+instance Monad (Reader r) where
+    return x = Reader $ \e -> x
+    m >>= k = Reader $ \e ->
+        let v = runReader m e
+        in runReader (k v) e
+
+-- ask возвращает окружение
+ask :: Reader r r
+ask = Reader id
+
+-- asks применяет функцию к окружению
+asks :: (r -> a) -> Reader r a
+asks = Reader
+
+-- local выполняет временное локальное преобразование окружения
+local :: (r -> r) -> Reader r a -> Reader r a
+local f m = Reader $ \e -> runReader m (f e)
+
+-- reader делает то же самое, что и Reader
+reader :: (r -> a) -> Reader r a
+reader f = do
+    r <- ask
+    return (f r)
+-}
+
+-------------------------------------------------------------------------------
+-- Монада Writer
+-------------------------------------------------------------------------------
+{-
+newtype Writer w a = Writer {runWriter :: (a, w)}
+
+writer :: (a, w) -> Writer w a
+writer = Writer
+
+execWriter :: Writer w a -> w
+execWriter m = snd (runWriter m)
+
+instance (Monoid w) => Monad (Writer w) where
+    return x = Writer (x, mempty)
+    m >>= k =
+        let (x,u) = runWriter m
+            (y,v) = runWriter $ k x
+        in Writer (y, u `mappend` v)
+
+example8 = runWriter (return 3 : Writer String Int) -- = (3, "")
+
+-- tell записывает в лог переданное значение
+tell :: Monoid w => w -> Writer w ()
+tell w = writer ((), w)
+
+-}
+
+-------------------------------------------------------------------------------
+-- Монада State
+-------------------------------------------------------------------------------
+{-
+newtype State s a = State { runState :: s -> (a,s) }
+
+instance Monad (State s) where
+    return a = State $ \st -> (a, st)
+
+    m >>= k = State $ \st ->
+        let (a, st') = runState m st
+            m' = k a
+        in runState m' st'
+
+execState :: State s a -> s -> s
+execState m s = snd (runState m s)
+
+evalState :: State s a -> s -> a
+evalState m s = fst (runState m s)
+
+get :: State s s
+get = State $ \st -> (st, st)
+
+put :: s -> State s ()
+put st = State $ \_ -> ((), st)
+
+modify :: (s -> s) -> State s ()
+modify f = State $ \s -> ((), f s)
+
+-- (пример)
+tick = do
+    n <- get
+    put (n+1)
+    return n
+-}
+
+-------------------------------------------------------------------------------
+-- Пример использования монады State
+-------------------------------------------------------------------------------
+-- Пример использования монады State для хранения состояния.
+-- Пусть есть тип двоичного дерева, содержащего значения в узлах:
+data Tree a = Leaf a | Fork (Tree a) a (Tree a)
+    deriving Show
+
+-- Требуется пронумеровать вершины дерева данной формы,
+-- обойдя их in-order (то есть, сначала обходим левое поддерево,
+-- затем текущую вершину, затем правое поддерево).
+
+numberTree :: Tree () -> Tree Integer
+numberTree tree = evalState (walkthrough tree) 1
+
+walkthrough :: Tree () -> State Integer (Tree Integer)
+walkthrough (Fork left _ right) = do
+    leftBranch <- walkthrough left
+    n <- get
+    put (n+1)
+    rightBranch <- walkthrough right
+    return (Fork leftBranch n rightBranch)
+
+walkthrough (Leaf _) = do
+    n <- get
+    put (n+1)
+    return (Leaf n)
+
+
+example9 = numberTree (Leaf ())
+example10 = numberTree (Fork (Leaf ()) () (Leaf ()))

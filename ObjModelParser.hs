@@ -6,9 +6,9 @@ import Graphics.Rendering.OpenGL hiding (Texture, normalize)
 import Data.List.Split
 import Data.Maybe
 
-type Vector2d = Vector2 Double
+type Vector2d = Vector2 GLdouble
 type Vector3i = Vector3 Int
-type Vector3d = Vector3 Double
+type Vector3d = Vector3 GLdouble
 
 data ParseResult = Vertex Vector3d | Normal Vector3d | Texture Vector2d | Face Vector3i Vector3i Vector3i | NoParseResult
 

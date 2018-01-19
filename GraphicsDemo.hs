@@ -44,8 +44,9 @@ display st model = do
     preservingMatrix $ do
         scale (0.9::GLdouble) 0.9 0.9
         rotate (angle) (Graphics.UI.GLUT.Vector3 0 1 0)
-        let renderList = model
-        mapM_ renderTriangle renderList
+
+        renderPrimitive Triangles $ do
+            mapM_ putTriangle model
 
     flush
 
@@ -58,9 +59,9 @@ idle st = do
     st $=! (angle', tstamp)
     postRedisplay Nothing
 
-renderTriangle ((Vector3 x1 y1 z1), (Vector3 x2 y2 z2), (Vector3 x3 y3 z3),
+putTriangle ((Vector3 x1 y1 z1), (Vector3 x2 y2 z2), (Vector3 x3 y3 z3),
                 (Vector3 nx1 ny1 nz1), (Vector3 nx2 ny2 nz2), (Vector3 nx3 ny3 nz3)) =
-    renderPrimitive Triangles $ do
+    do
         normal $ Normal3 nx1 ny1 nz1
         vertex $ Vertex3 x1 y1 z1
         normal $ Normal3 nx2 ny2 nz2

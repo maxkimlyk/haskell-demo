@@ -1278,6 +1278,31 @@ logFirstAndRetSecondIO = do
 -- Second is "B"
 -- ("B","a")
 
--- newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
--- reader :: Monad m => (r -> a) -> ReaderT r m a
--- reader f = ReaderT (return . f)
+-------------------------------------------------------------------------------
+-- Трансформер ReaderT
+-------------------------------------------------------------------------------
+{-
+newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
+reader :: Monad m => (r -> a) -> ReaderT r m a
+reader f = ReaderT (return . f)
+
+instance Functor m => Functor (ReaderT r m) where
+    fmap :: (a -> b) -> ReaderT r m a -> ReaderT r m b
+    fmap f rdr = ReaderT $ fmap f . runReaderT rdr
+
+instance Applicative m => Applicative (ReaderT r m) where
+    pure :: a -> ReaderT r m a
+    pure = ReaderT . const . pure
+    (<*>) :: ReaderT r m (a -> b) -> ReaderT r m a -> ReaderT r m b
+    f <*> v = ReaderT $ \env -> runReaderT f env <*> runReaderT v env
+
+instance Monad m => Monad (ReaderT r m) where
+    (>>=) :: ReaderT r m a -> (a -> ReaderT r m b) -> ReaderT r m b
+    m >>= k = ReaderT $ \env -> do
+        v <- runReaderT m env
+        runReaderT (k v) env
+
+instance MonadTrans (ReaderT r m) where
+    lift :: Monad m => m a -> ReaderT r m a
+    lift m = ReaderT $ \_ -> m
+-}

@@ -1283,6 +1283,7 @@ logFirstAndRetSecondIO = do
 -------------------------------------------------------------------------------
 {-
 newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
+
 reader :: Monad m => (r -> a) -> ReaderT r m a
 reader f = ReaderT (return . f)
 
@@ -1305,4 +1306,58 @@ instance Monad m => Monad (ReaderT r m) where
 instance MonadTrans (ReaderT r m) where
     lift :: Monad m => m a -> ReaderT r m a
     lift m = ReaderT $ \_ -> m
+-}
+
+-------------------------------------------------------------------------------
+-- Трансформер WriterT
+-------------------------------------------------------------------------------
+{-
+newtype WriterT w m a = WriterT { runWriterT :: m (a, w) }
+
+writer :: Monad m => (a, w) -> WriterT w m a
+writer = WriterT . return
+
+execWriterT :: Monad m => Writer w m a -> m w
+execWriterT = fmap snd . runWriterT
+
+instance Functor m => Functor (WriterT w m) where
+    fmap :: (a -> b) -> WriterT w m a -> WriterT w m b
+    fmap f = WriterT . fmap updater . runWriterT where
+        updater ~(x, log) = (f x, log)                    -- ~ - неопровержимый образец
+                                                          -- с ~ - LazyWriter
+                                                          -- без ~ - StrictWriter
+
+instance (Applicative m, Monoid w) => Applicative (WriterT w m) where
+    pure :: a -> WriterT w m a
+    pure x = WriterT $ pure (x, mempty)
+    (<*>) :: WriterT w m (a -> b) -> WriterT w m a -> WriterT w m b
+    f <*> v = WriterT $ liftA2 updater (runWriterT f) (runWriterT v) where
+        updater ~(g, w) ~(x, w') = (g x, w `mappend` w`)
+
+instance (Monad m, Monoid w) => Monad (WriterT w m) where
+    (>>=) :: WriterT w m a -> (a -> WriterT w m b) -> WriterT w m b
+    m >>= k = WriterT $ do
+        ~(v, w) <- runWriterT m
+        ~(v', w') <- runWriterT (k v)
+        return (v', w `mappend` w')
+
+instance (Monoid w) => MonadTrans (WriterT w) where
+    lift :: Monad m => m a -> WriterT w m a
+    lift m = WriterT $ do
+        x <- m
+        return (x, mempty)
+
+tell :: Monad m => w -> WriterT w m ()
+tell w = writer ((), w)
+
+listen :: Monad m => WriterT w m a -> WritrT w m (a,w)
+listen m = WriterT $ do
+    ~(a, w) <- runWriterT m
+    return ((a, w), w)
+
+censor :: Monad m => (w -> w) -> WriterT w m a -> WriterT w m a
+censor f m = WriterT $ do
+    ~(a, w) <- runWriterT m
+    return (a, f w)
+
 -}

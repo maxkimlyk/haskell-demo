@@ -49,6 +49,10 @@ import Control.Monad.State hiding (withState) -- кроме заданных
 import qualified Data.Set                     -- для всех функций из этого модуля должны использоваться полные имена
 import Data.Word as Word                      -- импорт с назначением псевдонима
 
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Writer
+import Control.Monad.Trans
+
 import Prelude hiding (
     id, const, flip, (.), ($!),
     length, (++), null, last, init, reverse, zip, zip3, unzip,
@@ -672,7 +676,7 @@ data Person = Person { firstName :: String, lastName :: String, age :: Int }
     deriving (Show, Eq)
 
 vasya = Person "Vasiliy" "Smith" 25
-xaview = Person {age = 40, firstName = "Phideaux", lastName = "Xavier"}
+xavier = Person {age = 40, firstName = "Phideaux", lastName = "Xavier"}
 -- unknownBill = Person {firstName = "Bill"} -- warning: не все поля заполнены
 
 -- Доступ по метке
@@ -842,7 +846,7 @@ class Applicative m => Monad m where
     -- связывание (оператор bind)
     (>>=) :: m a -> (a -> m b) -> m b
     -- облегченное связывание
-    (>>) :: ma -> m b -> m b
+    (>>) :: m a -> m b -> m b
     x >> y = x >>= \_ -> y
     -- функция fail
     fail :: String -> m a
@@ -1169,3 +1173,111 @@ walkthrough (Leaf _) = do
 
 example9 = numberTree (Leaf ())
 example10 = numberTree (Fork (Leaf ()) () (Leaf ()))
+
+-------------------------------------------------------------------------------
+-- Трансформеры монад
+-------------------------------------------------------------------------------
+secondElem :: Reader [String] String
+secondElem = do
+    el2 <- asks (map toUpper . head .tail)
+    return el2
+
+-- > runReader secondElem ["1", "2", "3"]
+-- "2"
+
+logFirst :: [String] -> Writer String String
+logFirst xs = do
+    let el1 = head xs
+    let el2 = (map toUpper . head .tail) xs
+    tell el1
+    return el2
+
+-- > runWriter $ logFirst ["a", "b", "c"]
+-- ("B","a")
+
+logFirstAndRetSecond :: ReaderT [String] -- трансформер
+                        (Writer String) -- внутренняя монада
+                        String -- тип, возвращаемый композитной монадой
+logFirstAndRetSecond = do
+    el1 <- asks head
+    el2 <- asks (map toUpper . head .tail)
+    lift $ tell el1 -- поднимаем вычисления из внутренней монады
+    return el2
+
+-- > :t runReaderT logFirstAndRetSecond
+-- runReaderT logFirstAndRetSecond :: [String] -> Writer String String
+-- > runWriter $ runReaderT logFirstAndRetSecond ["a", "b", "c"]
+-- ("B","a")
+
+logFirstAndRetSecond2 :: WriterT String (Reader [String]) String
+logFirstAndRetSecond2 = do
+    el1 <- lift $ asks head
+    el2 <- lift $ asks (map toUpper . head .tail)
+    tell el1
+    lift $ return el2
+
+-- > (runReader (runWriterT logFirstAndRetSecond2)) ["a", "b", "c"]
+-- ("B","a")
+
+separate :: (a -> Bool) -> (a -> Bool) -> [a] -> WriterT [a] (Writer [a]) [a]
+separate p1 p2 ss = do
+    let log1 = filter p1 ss
+    let log2 = filter p2 ss
+    let ret = filter (\x -> not (p1 x) && not (p2 x)) ss
+    tell log1
+    lift $ tell log2
+    return ret
+
+-- > (runWriter . runWriterT) $ separate (<3) (>7) [0..10]
+-- (([3,4,5,6,7],[0,1,2]),[8,9,10])
+
+-------------------------------------------------------------------------------
+-- MyRW - My Reader-Writer
+-------------------------------------------------------------------------------
+type MyRW = ReaderT [String] (Writer String)
+-- тогда можно записать logFirstAndRetSecond :: MyRW String
+
+runMyRW :: MyRW a -> [String] -> (a, String)
+runMyRW rw e = runWriter (runReaderT rw e)
+
+-- > runMyRW logFirstAndRetSecond ["a", "b", "c"]
+-- ("B","a")
+
+-- asks можно вызывать напрямую, но tell - только с помощью lift.
+-- Поэтому напишем свои функции для доступа к интерфейсу монады MyRW
+-- myAsks :: ([String] -> a) -> MyRW a
+-- myAsks = asks
+-- myTell :: String -> MyRW ()
+-- myTell = lift . tell
+
+type MyRWT m = ReaderT [String] (WriterT String m)
+
+runMyRWT :: MyRWT m a -> [String] -> m (a, String)
+runMyRWT rw e = runWriterT (runReaderT rw e)
+
+myAsks :: Monad m => ([String] -> a) -> MyRWT m a
+myAsks = asks
+
+myTell :: Monad m => String -> MyRWT m ()
+myTell = lift . tell
+
+myLift :: Monad m => m a -> MyRWT m a
+myLift = lift . lift
+
+logFirstAndRetSecondIO :: MyRWT IO String
+logFirstAndRetSecondIO = do
+    el1 <- myAsks head
+    myLift $ putStrLn $ "First is " ++ show el1
+    el2 <- myAsks (map toUpper . head . tail)
+    myLift $ putStrLn $ "Second is " ++ show el2
+    myTell el1
+    return el2
+
+-- > runMyRWT logFirstAndRetSecondIO ["a", "b", "c"]
+-- First is "a"
+-- Second is "B"
+-- ("B","a")
+
+-- newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
+-- reader :: Monad m => (r -> a) -> ReaderT r m a
+-- reader f = ReaderT (return . f)
